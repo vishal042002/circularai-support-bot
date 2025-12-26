@@ -9,6 +9,7 @@ from core.llm import LLMService
 from core.search import HybridSearch
 from agents.rag_agent import RAGAgent
 import uuid
+import traceback
 
 # Page config
 st.set_page_config(
@@ -59,13 +60,32 @@ if "session_id" not in st.session_state:
 if "agent" not in st.session_state:
     with st.spinner("🔄 Initializing CircularAI Support Bot..."):
         try:
+            st.write("🔧 Step 1: Initializing embeddings...")
             embedder = EmbeddingService()
+            st.write("✅ Embeddings initialized successfully")
+            
+            st.write("🔧 Step 2: Initializing vector store...")
             vector_store = VectorStore()
+            st.write("✅ Vector store initialized successfully")
+            
+            st.write("🔧 Step 3: Initializing LLM...")
             llm = LLMService()
+            st.write("✅ LLM initialized successfully")
+            
+            st.write("🔧 Step 4: Initializing hybrid search...")
             search = HybridSearch(embedder, vector_store)
+            st.write("✅ Search initialized successfully")
+            
+            st.write("🔧 Step 5: Initializing RAG agent...")
             st.session_state.agent = RAGAgent(embedder, vector_store, llm, search)
+            st.write("✅ Agent initialized successfully")
+            
+            st.success("🎉 All components initialized! Bot is ready!")
+            
         except Exception as e:
             st.error(f"❌ Failed to initialize bot: {e}")
+            st.write("**Full error traceback:**")
+            st.code(traceback.format_exc())
             st.stop()
 
 # Header
@@ -184,6 +204,7 @@ if prompt := st.chat_input("Ask a question about CircularAI..."):
                 
             except Exception as e:
                 st.error(f"❌ Error: {e}")
+                st.code(traceback.format_exc())
 
 # Footer
 st.divider()
