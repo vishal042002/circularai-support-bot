@@ -208,4 +208,4 @@ if prompt := st.chat_input("Ask a question about CircularAI..."):
 
 # Footer
 st.divider()
-st.caption("💡 Tip: Ask follow-up questions for more detailed information!")
+st.caption("💡 Tip: Ask follow-up questions for more detailed information!")# Force rebuild
