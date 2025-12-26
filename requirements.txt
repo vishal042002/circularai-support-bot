@@ -47,7 +47,7 @@ multidict==6.7.0
 narwhals==2.14.0
 networkx==3.6.1
 numpy==1.24.3
-openai==2.14.0
+openai==1.54.0
 orjson==3.11.5
 ormsgpack==1.12.1
 packaging==24.2
