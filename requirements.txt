@@ -1,6 +1,6 @@
 # Core dependencies
 openai==1.54.0
-pinecone-client==5.0.0
+pinecone-client==4.1.0
 python-dotenv==1.0.0
 pydantic==2.9.0
 pyyaml==6.0.1
