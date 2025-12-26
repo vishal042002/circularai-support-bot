@@ -5,16 +5,10 @@ python-dotenv==1.0.0
 pydantic==2.9.0
 pyyaml==6.0.1
 
-# LangChain ecosystem - COMPATIBLE VERSIONS
+# LangChain ecosystem - minimal
 langchain==0.3.0
-langchain-core==0.3.63
 langchain-openai==0.2.0
-langchain-text-splitters==0.3.8
 langgraph==0.2.48
-langgraph-checkpoint==2.0.6
-langgraph-checkpoint-sqlite==2.0.6
-langgraph-sdk==0.1.74
-langsmith==0.1.140
 
 # Document processing
 python-docx==1.1.0
