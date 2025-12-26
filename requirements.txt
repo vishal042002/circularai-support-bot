@@ -8,7 +8,8 @@ pyyaml==6.0.1
 # LangChain ecosystem
 langchain==0.3.0
 langchain-openai==0.2.0
-langgraph==0.2.38
+langgraph>=0.2.48
+langgraph-checkpoint==3.0.1
 langgraph-checkpoint-sqlite==3.0.1
 langsmith==0.1.140
 
