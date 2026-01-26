@@ -61,7 +61,20 @@ class IngestionPipeline:
         logger.info("=" * 80)
         logger.info("STARTING DOCUMENT INGESTION PIPELINE")
         logger.info("=" * 80)
-        
+
+        # Clean existing vectors to prevent duplicates
+        logger.info("\n[Pre-check] Checking for existing vectors...")
+        existing_stats = self.vector_store.get_stats()
+        existing_count = existing_stats.get('total_vector_count', 0)
+
+        if existing_count > 0:
+            logger.warning(f"  Found {existing_count} existing vectors in Pinecone")
+            logger.warning("  Deleting all existing vectors to prevent duplicates...")
+            self.vector_store.delete_all()
+            logger.info("  Pinecone cleared successfully")
+        else:
+            logger.info("  Pinecone is empty - ready for ingestion")
+
         # Step 1: Load DOCX
         logger.info("\n[1/6] Loading DOCX file...")
         document = self.docx_loader.load(docx_path)

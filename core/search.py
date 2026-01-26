@@ -41,43 +41,84 @@ class HybridSearch:
     def _initialize_bm25_from_pinecone(self):
         """Initialize BM25 index by fetching all vectors from Pinecone"""
         try:
-            # Fetch all vectors from Pinecone
             stats = self.vector_store.get_stats()
             total_vectors = stats.get('total_vector_count', 0)
-            
+
             if total_vectors == 0:
                 logger.warning("No vectors in Pinecone, BM25 index will be empty")
                 return
-            
-            # Build from processed JSON file if available
+
+            # Try to build from JSON first (faster)
             from pathlib import Path
             import json
-            
+
             processed_dir = Path("data/processed")
             chunks_file = list(processed_dir.glob("*_chunks.json"))
-            
+
             if chunks_file:
-                logger.info(f"Building BM25 index from {total_vectors} vectors...")
-                
                 with open(chunks_file[0], 'r') as f:
                     chunks = json.load(f)
-                
-                documents = [
-                    {
-                        "id": chunk["id"],
-                        "text": chunk["text"],
-                        "metadata": chunk["metadata"]
-                    }
-                    for chunk in chunks
-                ]
-                
+
+                # Verify JSON count matches Pinecone count
+                if len(chunks) == total_vectors:
+                    logger.info(f"Building BM25 index from {len(chunks)} JSON chunks (verified sync)...")
+                    documents = [
+                        {
+                            "id": chunk["id"],
+                            "text": chunk["text"],
+                            "metadata": chunk["metadata"]
+                        }
+                        for chunk in chunks
+                    ]
+                    self.build_bm25_index(documents)
+                    return
+                else:
+                    logger.warning(
+                        f"JSON/Pinecone mismatch: JSON={len(chunks)}, Pinecone={total_vectors}. "
+                        f"Fetching from Pinecone instead..."
+                    )
+
+            # Fallback: Fetch from Pinecone
+            logger.info(f"Building BM25 index from {total_vectors} Pinecone vectors...")
+            documents = self._fetch_all_from_pinecone()
+
+            if documents:
                 self.build_bm25_index(documents)
             else:
-                logger.warning("No processed chunks file found, BM25 index not built")
-        
+                logger.warning("No valid documents available for BM25")
+
         except Exception as e:
             logger.error(f"Failed to initialize BM25 index: {e}")
-    
+
+    def _fetch_all_from_pinecone(self) -> List[Dict]:
+        """Fetch all documents from Pinecone for BM25 indexing"""
+        stats = self.vector_store.get_stats()
+        total_vectors = stats.get('total_vector_count', 0)
+
+        if total_vectors == 0:
+            return []
+
+        # Query with dummy vector to get all results
+        # This is a workaround since Pinecone doesn't have direct fetch_all()
+        dummy_vector = [0.0] * self.embedder.dimension
+        batch_size = 10000  # Pinecone max top_k
+
+        results = self.vector_store.index.query(
+            vector=dummy_vector,
+            top_k=min(total_vectors, batch_size),
+            include_metadata=True
+        )
+
+        return [
+            {
+                "id": match.id,
+                "text": match.metadata.get("text", ""),
+                "metadata": {k: v for k, v in match.metadata.items() if k != "text"}
+            }
+            for match in results.matches
+            if match.metadata.get("text", "").strip()  # Only valid text
+        ]
+
     def build_bm25_index(self, documents: List[Dict]):
         """Build BM25 index from documents"""
         self.bm25_corpus = documents
@@ -140,20 +181,34 @@ class HybridSearch:
         if bm25_results is None:
             bm25_results = self.bm25_search(query, top_k)
         
-        # Normalize scores to [0, 1]
-        def normalize(results):
+        # Normalize scores to [0, 1] while preserving relative quality
+        def normalize(results, search_type="semantic"):
             if not results:
                 return []
             scores = [r["score"] for r in results]
-            max_score, min_score = max(scores), min(scores)
-            range_score = max_score - min_score if max_score != min_score else 1
-            
-            for r in results:
-                r["normalized_score"] = (r["score"] - min_score) / range_score
+
+            # Use different normalization strategies based on search type
+            if search_type == "semantic":
+                # Semantic scores are cosine similarity (already 0-1 range)
+                # Just use them directly - no normalization needed!
+                for r in results:
+                    r["normalized_score"] = r["score"]
+            else:
+                # BM25 scores: use min-max but preserve absolute quality
+                max_score, min_score = max(scores), min(scores)
+                range_score = max_score - min_score if max_score != min_score else 1
+
+                for r in results:
+                    # Min-max normalization
+                    normalized = (r["score"] - min_score) / range_score
+                    # Scale down if max score is low (indicates poor overall quality)
+                    quality_factor = min(max_score / 10.0, 1.0)  # Assume 10+ is good BM25 score
+                    r["normalized_score"] = normalized * quality_factor
+
             return results
         
-        semantic_results = normalize(semantic_results)
-        bm25_results = normalize(bm25_results)
+        semantic_results = normalize(semantic_results, search_type="semantic")
+        bm25_results = normalize(bm25_results, search_type="bm25")
         
         # Combine scores
         combined = defaultdict(lambda: {"semantic": 0, "bm25": 0, "doc": None})
@@ -174,8 +229,16 @@ class HybridSearch:
                 self.semantic_weight * scores["semantic"] +
                 self.bm25_weight * scores["bm25"]
             )
-            
+
             result = scores["doc"]
+
+            # BOOST: Penalize screenshot-heavy chunks
+            text = result.get("text", "")
+            if text.startswith("[Related Screenshots:]"):
+                # Reduce score for screenshot descriptions by 30%
+                final_score *= 0.7
+                logger.debug(f"Applied screenshot penalty to chunk {doc_id[:50]}")
+
             result["hybrid_score"] = final_score
             result["semantic_score"] = scores["semantic"]
             result["bm25_score"] = scores["bm25"]
@@ -183,5 +246,13 @@ class HybridSearch:
         
         # Sort by hybrid score
         final_results.sort(key=lambda x: x["hybrid_score"], reverse=True)
-        
+
+        # Debug logging for top result
+        if final_results:
+            top = final_results[0]
+            logger.debug(
+                f"Top result - Hybrid: {top['hybrid_score']:.3f} "
+                f"(Semantic: {top['semantic_score']:.3f}, BM25: {top['bm25_score']:.3f})"
+            )
+
         return final_results[:top_k]

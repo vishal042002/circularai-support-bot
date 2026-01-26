@@ -28,25 +28,6 @@ st.markdown("""
         padding: 1rem;
         border-radius: 0.5rem;
     }
-    .confidence-badge {
-        display: inline-block;
-        padding: 0.25rem 0.5rem;
-        border-radius: 0.25rem;
-        font-size: 0.875rem;
-        margin-top: 0.5rem;
-    }
-    .confidence-high {
-        background-color: #d4edda;
-        color: #155724;
-    }
-    .confidence-medium {
-        background-color: #fff3cd;
-        color: #856404;
-    }
-    .confidence-low {
-        background-color: #f8d7da;
-        color: #721c24;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -124,29 +105,10 @@ with st.sidebar:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-        
+
         # Show metadata for assistant messages
         if message["role"] == "assistant" and "metadata" in message:
-            confidence = message["metadata"]["confidence"]
             sources = message["metadata"]["sources"]
-            
-            # Confidence badge
-            if confidence >= 0.8:
-                badge_class = "confidence-high"
-                badge_text = "High Confidence"
-            elif confidence >= 0.6:
-                badge_class = "confidence-medium"
-                badge_text = "Medium Confidence"
-            else:
-                badge_class = "confidence-low"
-                badge_text = "Low Confidence"
-            
-            st.markdown(f"""
-            <div class="confidence-badge {badge_class}">
-                {badge_text}: {confidence:.0%}
-            </div>
-            """, unsafe_allow_html=True)
-            
             st.caption(f"📚 Sources: {', '.join(sources)}")
 
 # Chat input
@@ -166,42 +128,23 @@ if prompt := st.chat_input("Ask a question about CircularAI..."):
                     prompt,
                     session_id=st.session_state.session_id
                 )
-                
+
                 # Display answer
                 st.markdown(response["answer"])
-                
-                # Display metadata
-                confidence = response["confidence"]
+
+                # Display sources
                 sources = response["sources"]
-                
-                if confidence >= 0.8:
-                    badge_class = "confidence-high"
-                    badge_text = "High Confidence"
-                elif confidence >= 0.6:
-                    badge_class = "confidence-medium"
-                    badge_text = "Medium Confidence"
-                else:
-                    badge_class = "confidence-low"
-                    badge_text = "Low Confidence"
-                
-                st.markdown(f"""
-                <div class="confidence-badge {badge_class}">
-                    {badge_text}: {confidence:.0%}
-                </div>
-                """, unsafe_allow_html=True)
-                
                 st.caption(f"📚 Sources: {', '.join(sources)}")
-                
+
                 # Save to history
                 st.session_state.messages.append({
                     "role": "assistant",
                     "content": response["answer"],
                     "metadata": {
-                        "confidence": confidence,
                         "sources": sources
                     }
                 })
-                
+
             except Exception as e:
                 st.error(f"❌ Error: {e}")
                 st.code(traceback.format_exc())

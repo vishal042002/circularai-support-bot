@@ -149,25 +149,32 @@ class RAGAgent:
         """Generate answer node"""
         query = state["query"]
         chunks = state["retrieved_chunks"]
-        
+
+        # DEBUG: Log retrieved chunks scores
+        logger.info(f"Query: '{query}'")
+        logger.info(f"Retrieved {len(chunks)} chunks:")
+        for i, chunk in enumerate(chunks[:3], 1):
+            logger.info(
+                f"  [{i}] Hybrid={chunk.get('hybrid_score', 0):.3f} "
+                f"(Sem={chunk.get('semantic_score', 0):.3f}, "
+                f"BM25={chunk.get('bm25_score', 0):.3f}) - "
+                f"{chunk['metadata'].get('section_h1', 'Unknown')}"
+            )
+
         # Build context
         context = self._build_context(chunks)
-        
+
         # Generate answer
         answer = self._generate_with_llm(query, context)
-        
-        # Calculate confidence
-        confidence = self._calculate_confidence(chunks)
-        
+
         # Extract sources
         sources = list(set([
             chunk["metadata"].get("section_h1", "Unknown")
             for chunk in chunks[:3]
         ]))
-        
+
         return {
             "final_answer": answer,
-            "confidence_score": confidence,
             "sources": sources,
             "messages": [{"role": "assistant", "content": answer}]
         }
@@ -207,16 +214,7 @@ class RAGAgent:
         ]
         
         return self.llm.generate(messages, temperature=0.7, max_tokens=800)
-    
-    def _calculate_confidence(self, chunks: List[Dict]) -> float:
-        """Calculate confidence score"""
-        if not chunks:
-            return 0.0
-        
-        # Use top chunk's hybrid score
-        top_score = chunks[0].get("hybrid_score", 0.5)
-        return min(top_score, 1.0)
-    
+
     # ==================== PUBLIC INTERFACE ====================
     
     def chat(
@@ -226,13 +224,13 @@ class RAGAgent:
     ) -> Dict:
         """
         Main chat interface
-        
+
         Args:
             message: User's question
             session_id: Session identifier for memory
-        
+
         Returns:
-            Dict with answer, sources, and confidence
+            Dict with answer and sources
         """
         # Invoke graph
         result = self.graph.invoke(
@@ -244,11 +242,10 @@ class RAGAgent:
             },
             config={"configurable": {"thread_id": session_id}}
         )
-        
+
         return {
             "answer": result["final_answer"],
             "sources": result["sources"],
-            "confidence": result["confidence_score"],
             "retrieved_chunks": result["retrieved_chunks"]
         }
     

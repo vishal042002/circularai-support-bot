@@ -17,7 +17,6 @@ class AgentState(TypedDict):
     bm25_results: List[Dict]
     hybrid_results: List[Dict]
     final_answer: str
-    confidence_score: float
     sources: List[str]
     session_id: str
     iteration: int

@@ -72,14 +72,14 @@ def main():
             
             # Get response from agent
             print("\nAgent: ", end="", flush=True)
-            
+
             response = agent.chat(user_input, session_id=session_id)
-            
+
             # Print answer
             print(response['answer'])
-            
-            # Print metadata (smaller, less intrusive)
-            print(f"\n[Confidence: {response['confidence']:.0%} | Sources: {', '.join(response['sources'])}]")
+
+            # Print sources
+            print(f"\n[Sources: {', '.join(response['sources'])}]")
             print()
             
         except KeyboardInterrupt:
